@@ -137,7 +137,7 @@
 
 <script>
 const tg = window.Telegram?.WebApp;
-const inTelegram = !!tg?.initData;
+const inTelegram = !!tg && tg.platform !== "unknown";  // not initData: it is empty when opened from the keyboard button
 const $ = id => document.getElementById(id);
 const SILENT = 180;  // s: the bot writes every 60, GitHub may serve a copy up to 60 s old
 const KINDS = {
@@ -153,8 +153,11 @@ let tab = "order", kind = "lithophane", status = null, fetched = 0;
 
 function send(payload) {
   tg?.HapticFeedback?.impactOccurred("light");
-  if (inTelegram) tg.sendData(JSON.stringify(payload));  // Telegram closes the app, the answer comes to the chat
-  else $("sent").textContent = "sendData → " + JSON.stringify(payload);
+  if (inTelegram) {
+    tg.sendData(JSON.stringify(payload));  // Telegram closes the app, the answer comes to the chat
+    // still open: this launch can't send (menu button, link) — only the keyboard button can
+    setTimeout(() => $("sent").textContent = "Не отправлено. Открой приложение кнопкой «Приложение» под полем ввода в чате.", 1500);
+  } else $("sent").textContent = "sendData → " + JSON.stringify(payload);
 }
 
 // --- tabs and the main button
