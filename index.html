@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3D-бот</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Telegram sets --tg-theme-* on <html>; the fallbacks are for a plain browser */
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #0f172a);
+    --hint: var(--tg-theme-hint-color, #64748b);
+    --link: var(--tg-theme-link-color, #2481cc);
+    --btn: var(--tg-theme-button-color, #2481cc);
+    --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    --section: var(--tg-theme-section-bg-color, var(--tg-theme-secondary-bg-color, #f1f5f9));
+    --sep: var(--tg-theme-section-separator-color, rgba(127, 127, 127, .25));
+    --danger: var(--tg-theme-destructive-text-color, #dc2626);
+    --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px 16px 96px; background: var(--bg); color: var(--text);
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  h1 { font-size: 20px; margin: 0; }
+  .pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+          background: var(--section); font-weight: 600; white-space: nowrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--hint); flex: none; }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--danger); }
+  #health { margin: 4px 0 12px; font-size: 14px; color: var(--hint); }
+  #health.bad { color: var(--danger); }
+  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 12px;
+        background: var(--section); margin-bottom: 16px; }
+  nav button { min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--text);
+               font: inherit; font-size: 14px; cursor: pointer; transition: background-color .2s; }
+  nav button[aria-selected="true"] { background: var(--bg); font-weight: 600; }
+  section[hidden] { display: none; }
+  label, .label { display: block; font-size: 14px; color: var(--hint); margin: 14px 0 6px; }
+  input[type=text], input[type=number], textarea { width: 100%; min-height: 44px; padding: 10px 12px;
+        border: 1px solid var(--sep); border-radius: 10px; background: var(--section); color: var(--text); font: inherit; }
+  textarea { min-height: 88px; resize: vertical; }
+  input[type=range] { width: 100%; min-height: 44px; accent-color: var(--btn); }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button, .mode { min-height: 44px; padding: 0 14px; border: 1px solid var(--sep); border-radius: 10px;
+        background: var(--section); color: var(--text); font: inherit; cursor: pointer; transition: border-color .2s; }
+  .seg button[aria-pressed="true"], .mode[aria-pressed="true"] { border-color: var(--btn); box-shadow: inset 0 0 0 1px var(--btn); }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mode { text-align: left; padding: 10px 12px; }
+  .mode small { display: block; color: var(--hint); font-size: 13px; }
+  .note { font-size: 14px; color: var(--hint); margin: 12px 0 0; }
+  .error { font-size: 14px; color: var(--danger); margin: 6px 0 0; min-height: 1em; }
+  .rows { list-style: none; margin: 0; padding: 0; border-radius: 12px; background: var(--section); }
+  .rows li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 56px; }
+  .rows li + li { border-top: 1px solid var(--sep); }
+  .rows .what { flex: 1; min-width: 0; }
+  .rows .what b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rows .what span { font-size: 13px; color: var(--hint); }
+  .small { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--btn);
+           color: var(--btn-text); font: inherit; font-size: 14px; cursor: pointer; }
+  .wide { width: 100%; margin-top: 10px; }
+  .ghost { background: var(--section); color: var(--link); }
+  .empty { color: var(--hint); padding: 16px 0; text-align: center; }
+  #fallback { position: fixed; left: 16px; right: 16px; bottom: 16px; min-height: 48px; font-size: 16px; }
+  #sent { white-space: pre-wrap; font-size: 12px; color: var(--hint); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>3D-бот</h1>
+  <div class="pill" role="status" aria-live="polite"><span class="dot" id="dot"></span><span id="balance">— кр</span></div>
+</header>
+<p id="health">загружаю статус…</p>
+
+<nav role="tablist">
+  <button role="tab" data-tab="order" aria-selected="true">Заказ</button>
+  <button role="tab" data-tab="free" aria-selected="false">Бесплатно</button>
+  <button role="tab" data-tab="queue" aria-selected="false">Очередь</button>
+  <button role="tab" data-tab="history" aria-selected="false">История</button>
+</nav>
+
+<section id="order" role="tabpanel">
+  <label for="what">Что сделать</label>
+  <textarea id="what" maxlength="1500" placeholder="фигурка бульдога; без фото — опиши подробно"></textarea>
+  <p class="error" id="what-error"></p>
+  <label for="height">Высота, мм</label>
+  <input id="height" type="number" inputmode="numeric" min="10" max="250" placeholder="как в настройках (80)">
+  <span class="label">Цвета</span>
+  <div class="seg" data-name="colors">
+    <button aria-pressed="true" data-v="1">Один</button><button aria-pressed="false" data-v="2">2</button>
+    <button aria-pressed="false" data-v="3">3</button><button aria-pressed="false" data-v="4">4 (AMS)</button>
+  </div>
+  <span class="label">Черновик</span>
+  <div class="seg" data-name="draft">
+    <button aria-pressed="true" data-v="auto">Как решит бот</button>
+    <button aria-pressed="false" data-v="yes">Сначала черновик</button><button aria-pressed="false" data-v="no">Сразу финал</button>
+  </div>
+  <label for="stand">Надпись на подставке</label>
+  <input id="stand" type="text" maxlength="20" placeholder="без подставки">
+  <p class="note">Фото пришли в чат до отправки — заказ возьмёт их. Цену бот назовёт в чате, кредиты тратятся только после кнопки там.</p>
+</section>
+
+<section id="free" role="tabpanel" hidden>
+  <div class="modes" id="modes"></div>
+  <div id="width-box">
+    <label for="width">Ширина: <b id="width-v"></b> мм</label>
+    <input id="width" type="range" min="20" max="200" step="5">
+  </div>
+  <div id="curve-box">
+    <label for="curve">Изгиб: <b id="curve-v"></b>°</label>
+    <input id="curve" type="range" min="0" max="300" step="10" value="0">
+  </div>
+  <div id="name-box">
+    <label for="name">Текст</label>
+    <input id="name" type="text" maxlength="30" placeholder="Ринат">
+    <p class="error" id="name-error"></p>
+  </div>
+  <p class="note" id="free-note"></p>
+</section>
+
+<section id="queue" role="tabpanel" hidden><ul class="rows" id="queue-rows"></ul></section>
+
+<section id="history" role="tabpanel" hidden>
+  <ul class="rows" id="history-rows"></ul>
+  <label for="again">Повторить последний заказ с правкой</label>
+  <input id="again" type="text" maxlength="500" placeholder="что поменять, можно пусто">
+  <button class="small wide" data-send='{"cmd":"again"}'>Повторить</button>
+  <button class="small wide ghost" data-send='{"cmd":"balance"}'>Баланс подробно</button>
+  <button class="small wide ghost" data-send='{"cmd":"help"}'>Помощь</button>
+</section>
+
+<button class="small" id="fallback" hidden></button>
+<pre id="sent"></pre>
+
+<script>
+const tg = window.Telegram?.WebApp;
+const inTelegram = !!tg?.initData;
+const $ = id => document.getElementById(id);
+const SILENT = 180;  // s: the bot writes every 60, GitHub may serve a copy up to 60 s old
+const KINDS = {
+  lithophane: ["Литофан", "из фото, светится", 100], relief: ["Рельеф", "плашка из картинки", 100],
+  cutter: ["Формочка", "для печенья по контуру", 70], keychain: ["Брелок", "по контуру картинки", 70],
+  magnet: ["Магнит", "по контуру картинки", 70], stencil: ["Трафарет", "по контуру картинки", 70],
+  name: ["Табличка", "с именем"], "name-keychain": ["Брелок", "с именем"],
+};
+const STEPS = { new: "новая", spec: "ждёт подтверждения цены", approved: "в очереди", running: "генерация",
+  "awaiting:prep": "ждёт решения по картинке", local: "делается", done: "готово", failed: "ошибка", canceled: "отменена" };
+const ACTIONS = { stop: "Отменить", cancel: "Отменить", resume: "Повторить" };
+let tab = "order", kind = "lithophane", status = null, fetched = 0;
+
+function send(payload) {
+  tg?.HapticFeedback?.impactOccurred("light");
+  if (inTelegram) tg.sendData(JSON.stringify(payload));  // Telegram closes the app, the answer comes to the chat
+  else $("sent").textContent = "sendData → " + JSON.stringify(payload);
+}
+
+// --- tabs and the main button
+const MAIN = { order: "Отправить заказ", free: "Сделать" };
+function show(name) {
+  tab = name;
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll("section").forEach(s => s.hidden = s.id !== name);
+  const text = MAIN[name];
+  if (inTelegram) text ? tg.MainButton.setText(text).show() : tg.MainButton.hide();
+  else { $("fallback").hidden = !text; $("fallback").textContent = text || ""; }
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.tab));
+
+function pick(group, v) {
+  group.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
+  group.dataset.value = v;
+}
+document.querySelectorAll(".seg").forEach(g => {
+  g.dataset.value = g.querySelector("[aria-pressed=true]").dataset.v;
+  g.onclick = e => e.target.dataset.v && pick(g, e.target.dataset.v);
+});
+const seg = name => document.querySelector(`.seg[data-name=${name}]`).dataset.value;
+
+// --- order: the form becomes plain words, the same as typing them in the chat
+function order() {
+  const what = $("what").value.trim();
+  $("what-error").textContent = what ? "" : "напиши, что сделать";
+  if (!what) return $("what").focus();
+  const h = parseInt($("height").value, 10), colors = seg("colors"), draft = seg("draft"), stand = $("stand").value.trim();
+  const words = [what.replace(/[.\s]*$/, ".")];
+  if (h >= 10 && h <= 250) words.push(`Высота ${h} мм.`);
+  if (colors !== "1") words.push(`${colors} цвета, печать на AMS.`);
+  if (draft === "yes") words.push("Сначала черновик.");
+  if (draft === "no") words.push("Без черновика, сразу финал.");
+  if (stand) words.push(`Подставка с надписью «${stand}».`);
+  send({ cmd: "order", text: words.join(" ") });
+}
+
+// --- free modes
+const modes = $("modes");
+for (const [k, [title, sub]] of Object.entries(KINDS)) {
+  const b = document.createElement("button");
+  b.className = "mode"; b.dataset.k = k;
+  b.innerHTML = `${title}<small>${sub}</small>`;
+  b.onclick = () => choose(k);
+  modes.append(b);
+}
+function choose(k) {
+  kind = k;
+  modes.querySelectorAll(".mode").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k));
+  const named = k.startsWith("name");
+  $("width-box").hidden = named;
+  $("curve-box").hidden = k !== "lithophane";
+  $("name-box").hidden = !named;
+  if (!named) $("width").value = KINDS[k][2];
+  $("free-note").textContent = named ? "" : "Картинку пришли в чат до нажатия — возьму первую.";
+  ranges();
+}
+function ranges() { $("width-v").textContent = $("width").value; $("curve-v").textContent = $("curve").value; }
+$("width").oninput = $("curve").oninput = ranges;
+function free() {
+  if (kind.startsWith("name")) {
+    const text = $("name").value.trim();
+    $("name-error").textContent = text ? "" : "напиши текст";
+    return text ? send({ cmd: "local", kind, text }) : $("name").focus();
+  }
+  const p = { cmd: "local", kind, width: +$("width").value };
+  if (kind === "lithophane") p.curve = +$("curve").value;
+  send(p);
+}
+
+function submit() { tab === "order" ? order() : tab === "free" && free(); }
+if (inTelegram) { tg.ready(); tg.expand(); tg.MainButton.onClick(submit); }
+$("fallback").onclick = submit;
+
+document.querySelectorAll("[data-send]").forEach(b => b.onclick = () => {
+  const p = JSON.parse(b.dataset.send);
+  if (p.cmd === "again") p.text = $("again").value.trim();
+  send(p);
+});
+
+// --- status: the bot writes status.json into a secret gist, the page only reads it
+function rows(el, list, empty) {
+  el.replaceChildren();
+  if (!list.length) return el.innerHTML = `<li class="empty">${empty}</li>`;
+  for (const r of list) {
+    const li = document.createElement("li"), m = r.run.match(/^(\d{4}-\d\d-\d\d)-(\d+)-(.+)$/);
+    li.innerHTML = `<div class="what"><b></b><span></span></div>`;
+    li.querySelector("b").textContent = m ? m[3] : r.run;
+    li.querySelector("span").textContent = `${STEPS[r.step] || r.step}${m ? ` · ${m[1].slice(5)} №${+m[2]}` : ""}`;
+    if (r.action) {
+      const b = document.createElement("button");
+      b.className = "small" + (r.action === "resume" ? "" : " ghost");
+      b.textContent = ACTIONS[r.action];
+      b.setAttribute("aria-label", `${ACTIONS[r.action]} ${li.querySelector("b").textContent}`);
+      b.onclick = () => send({ cmd: "act", data: `${r.action}:${r.run}` });
+      li.append(b);
+    }
+    el.append(li);
+  }
+}
+function paint() {
+  const dot = $("dot"), health = $("health");
+  dot.className = "dot"; health.className = "";
+  if (!status) return health.textContent = fetched ? "нет связи со статусом" : "загружаю статус…";
+  const age = Date.now() / 1000 - status.time;
+  $("balance").textContent = `${status.balance ?? "—"} кр`;
+  let bad = status.problems.join(" · ");
+  if (age > SILENT) bad = `бот молчит ${status.time ? Math.round(age / 60) + " мин" : "— ещё не писал статус"}`;
+  dot.classList.add(bad ? "bad" : "ok");
+  health.className = bad ? "bad" : "";
+  health.textContent = bad || `работает · обновлено ${Math.max(0, Math.round(age))} с назад`;
+}
+async function refresh() {
+  const gist = new URLSearchParams(location.search).get("gist");
+  fetched = Date.now();
+  if (!gist) { status = null; return paint(); }
+  try {
+    const r = await fetch(`https://api.github.com/gists/${encodeURIComponent(gist)}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    status = JSON.parse((await r.json()).files["status.json"].content);
+    rows($("queue-rows"), status.queue, "очередь пуста");
+    rows($("history-rows"), status.history, "задач ещё не было");
+  } catch (e) { status = null; }
+  paint();
+}
+
+choose(kind);
+show("order");
+refresh();
+setInterval(() => document.visibilityState === "visible" && refresh(), 60000);  // 60 an hour: GitHub's limit
+setInterval(paint, 10000);
+</script>
+</body>
+</html>
