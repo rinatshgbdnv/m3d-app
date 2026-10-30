@@ -118,6 +118,10 @@
     <input id="name" type="text" maxlength="30" placeholder="Ринат">
     <p class="error" id="name-error"></p>
   </div>
+  <div id="draw-box">
+    <label for="draw">Что нарисовать, если нет картинки</label>
+    <input id="draw" type="text" maxlength="100" placeholder="динозавр">
+  </div>
   <p class="note" id="free-note"></p>
 </section>
 
@@ -147,7 +151,7 @@ const KINDS = {
   name: ["Табличка", "с именем"], "name-keychain": ["Брелок", "с именем"],
 };
 const STEPS = { new: "новая", spec: "ждёт подтверждения цены", approved: "в очереди", running: "генерация",
-  "awaiting:prep": "ждёт решения по картинке", local: "делается", done: "готово", failed: "ошибка", canceled: "отменена" };
+  "awaiting:prep": "ждёт решения по картинке", "awaiting:draw": "ждёт решения по картинке", local: "делается", done: "готово", failed: "ошибка", canceled: "отменена" };
 const ACTIONS = { stop: "Отменить", cancel: "Отменить", resume: "Повторить" };
 let tab = "order", kind = "lithophane", status = null, fetched = 0;
 
@@ -213,8 +217,11 @@ function choose(k) {
   $("width-box").hidden = named;
   $("curve-box").hidden = k !== "lithophane";
   $("name-box").hidden = !named;
+  const drawn = !named && k !== "lithophane";  // the bot's local.DRAW
+  $("draw-box").hidden = !drawn;
   if (!named) $("width").value = KINDS[k][2];
-  $("free-note").textContent = named ? "" : "Картинку пришли в чат до нажатия — возьму первую.";
+  $("free-note").textContent = named ? "" : "Картинку пришли в чат до нажатия — возьму первую." +
+    (drawn ? " Нет картинки — бесплатно нарисую по словам в ChatGPT и покажу до сборки." : "");
   ranges();
 }
 function ranges() { $("width-v").textContent = $("width").value; $("curve-v").textContent = $("curve").value; }
@@ -227,6 +234,7 @@ function free() {
   }
   const p = { cmd: "local", kind, width: +$("width").value };
   if (kind === "lithophane") p.curve = +$("curve").value;
+  else if ($("draw").value.trim()) p.text = $("draw").value.trim();
   send(p);
 }
 
