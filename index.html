@@ -93,11 +93,6 @@
     <button aria-pressed="true" data-v="1">Один</button><button aria-pressed="false" data-v="2">2</button>
     <button aria-pressed="false" data-v="3">3</button><button aria-pressed="false" data-v="4">4 (AMS)</button>
   </div>
-  <span class="label">Черновик</span>
-  <div class="seg" data-name="draft">
-    <button aria-pressed="true" data-v="auto">Как решит бот</button>
-    <button aria-pressed="false" data-v="yes">Сначала черновик</button><button aria-pressed="false" data-v="no">Сразу финал</button>
-  </div>
   <label for="stand">Надпись на подставке</label>
   <input id="stand" type="text" maxlength="20" placeholder="без подставки">
   <p class="note">Фото пришли в чат до отправки — заказ возьмёт их. Цену бот назовёт в чате, кредиты тратятся только после кнопки там.</p>
@@ -191,12 +186,10 @@ function order() {
   const what = $("what").value.trim();
   $("what-error").textContent = what ? "" : "напиши, что сделать";
   if (!what) return $("what").focus();
-  const h = parseInt($("height").value, 10), colors = seg("colors"), draft = seg("draft"), stand = $("stand").value.trim();
+  const h = parseInt($("height").value, 10), colors = seg("colors"), stand = $("stand").value.trim();
   const words = [what.replace(/[.\s]*$/, ".")];
   if (h >= 10 && h <= 250) words.push(`Высота ${h} мм.`);
   if (colors !== "1") words.push(`${colors} цвета, печать на AMS.`);
-  if (draft === "yes") words.push("Сначала черновик.");
-  if (draft === "no") words.push("Без черновика, сразу финал.");
   if (stand) words.push(`Подставка с надписью «${stand}».`);
   send({ cmd: "order", text: words.join(" ") });
 }
